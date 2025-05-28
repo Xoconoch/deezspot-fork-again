@@ -393,50 +393,6 @@ class EASY_DW:
             skipped_track.was_skipped = True
             return skipped_track
 
-        # Initial download start status with the new required format
-        # progress_data = {
-        #     "type": "track",
-        #     "song": self.__song_metadata['music'],
-        #     "artist": self.__song_metadata['artist'],
-        #     "status": "progress",
-        #     "url": self.__link,
-        #     "convert_to": self.__convert_to
-        # }
-        # 
-        # # Add parent info based on parent type
-        # if self.__parent == "playlist" and hasattr(self.__preferences, "json_data"):
-        #     playlist_data = self.__preferences.json_data
-        #     playlist_name = playlist_data.get('title', 'unknown')
-        #     total_tracks = getattr(self.__preferences, 'total_tracks', 0)
-        #     current_track = getattr(self.__preferences, 'track_number', 0)
-        #     
-        #     progress_data.update({
-        #         "current_track": current_track,
-        #         "total_tracks": total_tracks,
-        #         "parent": {
-        #             "type": "playlist",
-        #             "name": playlist_name,
-        #             "owner": playlist_data.get('creator', {}).get('name', 'unknown')
-        #         }
-        #     })
-        # elif self.__parent == "album":
-        #     album_name = self.__song_metadata.get('album', '')
-        #     album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('artist', ''))
-        #     total_tracks = getattr(self.__preferences, 'total_tracks', 0)
-        #     current_track = getattr(self.__preferences, 'track_number', 0)
-        #     
-        #     progress_data.update({
-        #         "current_track": current_track,
-        #         "total_tracks": total_tracks,
-        #         "parent": {
-        #             "type": "album",
-        #             "title": album_name,
-        #             "artist": album_artist
-        #         }
-        #     })
-        # 
-        # Download_JOB.report_progress(progress_data)
-
         try:
             if self.__infos_dw.get('__TYPE__') == 'episode':
                 try:
@@ -514,6 +470,25 @@ class EASY_DW:
 
         self.__c_track.md5_image = pic
 
+        # Final check if track download/processing failed and it was not an intentional skip
+        if not self.__c_track.success and not getattr(self.__c_track, 'was_skipped', False):
+            song_title = self.__song_metadata.get('music', 'Unknown Song')
+            artist_name = self.__song_metadata.get('artist', 'Unknown Artist')
+            
+            # Retrieve the most specific error message stored on the track object
+            # This message would have been set by download_try or download_episode_try
+            original_error_msg = getattr(self.__c_track, 'error_message', "Download failed for an unspecified reason.")
+            
+            error_msg_template = "Cannot download '{title}' by '{artist}'. Reason: {reason}"
+            final_error_msg = error_msg_template.format(title=song_title, artist=artist_name, reason=original_error_msg)
+            
+            current_link = self.__c_track.link if hasattr(self.__c_track, 'link') and self.__c_track.link else self.__link
+            
+            logger.error(f"{final_error_msg} (URL: {current_link})")
+            # Ensure the error message on the track is the final one before raising
+            self.__c_track.error_message = final_error_msg 
+            raise TrackNotFound(message=final_error_msg, url=current_link)
+
         return self.__c_track
 
     def download_try(self) -> Track:
@@ -536,7 +511,7 @@ class EASY_DW:
                 if media:
                     self.__infos_dw['media_url'] = media[0]
                 else:
-                    raise TrackNotFound(f"Track {song} - {artist} not available in MP3 format")
+                    raise TrackNotFound(f"Track {song} - {artist} not available in MP3 format after FLAC attempt failed (filesize was 0).")
 
         # Continue with the normal download process.
         try:
@@ -563,10 +538,11 @@ class EASY_DW:
                         song_link = media[0]['media'][0]['sources'][0]['url']
                         crypted_audio = API_GW.song_exist(song_link)
                     else:
-                        raise TrackNotFound(f"Track {song} - {artist} not available")
+                        raise TrackNotFound(f"Track {song} - {artist} not available in MP3 after FLAC attempt failed (media not found for MP3).")
                 else:
                     if not self.__recursive_quality:
-                        raise QualityNotFound(msg=msg)
+                        # msg was not defined, provide a more specific message
+                        raise QualityNotFound(f"Quality {self.__quality_download} not found for {song} - {artist} and recursive quality search is disabled.")
                     for c_quality in qualities:
                         if self.__quality_download == c_quality:
                             continue
@@ -583,7 +559,7 @@ class EASY_DW:
                                 break
                             except TrackNotFound:
                                 if c_quality == "MP3_128":
-                                    raise TrackNotFound(f"Error with {song} - {artist}", self.__link)
+                                    raise TrackNotFound(f"Error with {song} - {artist}. All available qualities failed, last attempt was {c_quality}. Link: {self.__link}")
                                 continue
 
             c_crypted_audio = crypted_audio.iter_content(2048)
@@ -754,13 +730,28 @@ class EASY_DW:
                 logger.error(f"Failed to process track: {error_msg}")
                 
                 # Still raise the exception to maintain original flow
-                raise TrackNotFound(f"Failed to process {self.__song_path}: {error_msg}")
+                # Add the original exception e to the message for more context
+                self.__c_track.success = False # Mark as failed
+                self.__c_track.error_message = error_msg # Store the refined error message
+                raise TrackNotFound(f"Failed to process {self.__song_path}. Error: {error_msg}. Original Exception: {str(e)}")
+
+            # If download and processing (like decryption, tagging) were successful before conversion
+            if not self.__convert_to: # Or if conversion was successful
+                 self.__c_track.success = True
 
             return self.__c_track
 
         except Exception as e:
-            logger.error(f"Download failed: {str(e)}")
-            raise TrackNotFound(self.__link) from e
+            # Add more context to this exception
+            song_title = self.__song_metadata.get('music', 'Unknown Song')
+            artist_name = self.__song_metadata.get('artist', 'Unknown Artist')
+            error_message = f"Download failed for '{song_title}' by '{artist_name}' (Link: {self.__link}). Error: {str(e)}"
+            logger.error(error_message)
+            # Store error on track object if possible
+            if hasattr(self, '_EASY_DW__c_track') and self.__c_track:
+                self.__c_track.success = False
+                self.__c_track.error_message = str(e)
+            raise TrackNotFound(message=error_message, url=self.__link) from e
 
     def download_episode_try(self) -> Episode:
         try:
@@ -809,7 +800,12 @@ class EASY_DW:
             if isfile(self.__song_path):
                 os.remove(self.__song_path)
             self.__c_track.success = False
-            raise TrackNotFound(f"Episode download failed: {str(e)}")
+            episode_title = self.__preferences.song_metadata.get('music', 'Unknown Episode')
+            err_msg = f"Episode download failed for '{episode_title}' (URL: {self.__link}). Error: {str(e)}"
+            logger.error(err_msg)
+            # Store error on track object
+            self.__c_track.error_message = str(e)
+            raise TrackNotFound(message=err_msg, url=self.__link) from e
 
     def __add_more_tags(self) -> None:
         contributors = self.__infos_dw.get('SNG_CONTRIBUTORS', {})
@@ -860,6 +856,11 @@ class EASY_DW:
                     need['LYRICS_SYNC_JSON']
                 )
 
+        # This method should only add tags. Error handling for download success/failure
+        # is managed by easy_dw after calls to download_try/download_episode_try.
+        # No error re-raising or success flag modification here.
+        # write_tags is called after this in download_try if successful.
+
 class DW_TRACK:
     def __init__(
         self,
@@ -886,9 +887,12 @@ class DW_TRACK:
         # Check if track failed but was NOT intentionally skipped
         if not track.success and not getattr(track, 'was_skipped', False):
             song = f"{self.__song_metadata['music']} - {self.__song_metadata['artist']}"
-            error_msg = f"Cannot download {song}, maybe it's not available in this format?"
-
-            raise TrackNotFound(message = error_msg)
+            # Attempt to get the original error message if available from the track object
+            original_error = getattr(track, 'error_message', "it's not available in this format or an error occurred.")
+            error_msg = f"Cannot download '{song}'. Reason: {original_error}"
+            current_link = track.link if hasattr(track, 'link') and track.link else self.__preferences.link
+            logger.error(f"{error_msg} (Link: {current_link})")
+            raise TrackNotFound(message=error_msg, url=current_link)
 
         return track
 
@@ -1043,7 +1047,8 @@ class DW_ALBUM:
                 except TrackNotFound:
                     track = Track(c_song_metadata, None, None, None, None, None)
                     track.success = False
-                    logger.warning(f"Track not found: {song} :(")
+                    track.error_message = f"Track not found after fallback attempt for: {song}" 
+                    logger.warning(f"Track not found: {song} :( Details: {track.error_message}. URL: {c_preferences.link if c_preferences else 'N/A'}")
             tracks.append(track)
 
         if self.__make_zip:
@@ -1156,7 +1161,8 @@ class DW_PLAYLIST:
 
             if not track.success:
                 song = f"{c_song_metadata['music']} - {c_song_metadata['artist']}"
-                logger.warning(f"Cannot download {song}")
+                error_detail = getattr(track, 'error_message', 'Download failed for unspecified reason.')
+                logger.warning(f"Cannot download '{song}'. Reason: {error_detail} (Link: {track.link or c_preferences.link})")
 
             tracks.append(track)
 
@@ -1315,4 +1321,8 @@ class DW_EPISODE:
         except Exception as e:
             if 'output_path' in locals() and os.path.exists(output_path):
                 os.remove(output_path)
-            raise TrackNotFound(f"Episode download failed: {str(e)}")
+            episode_title = self.__preferences.song_metadata.get('music', 'Unknown Episode')
+            err_msg = f"Episode download failed for '{episode_title}' (URL: {self.__preferences.link}). Error: {str(e)}"
+            logger.error(err_msg)
+            # Add original error to exception
+            raise TrackNotFound(message=err_msg, url=self.__preferences.link) from e
