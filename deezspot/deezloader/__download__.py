@@ -446,7 +446,7 @@ class EASY_DW:
                             "parent": {
                                 "type": "album",
                                 "title": self.__song_metadata.get('album', ''),
-                                "artist": self.__song_metadata.get('album_artist', self.__song_metadata.get('artist', '')),
+                                "artist": self.__preferences.song_metadata.get('album_artist', self.__preferences.song_metadata.get('artist', '')),
                                 "url": f"https://deezer.com/album/{self.__preferences.song_metadata.get('album_id', '')}"
                             }
                         })
