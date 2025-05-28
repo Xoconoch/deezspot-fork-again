@@ -1204,6 +1204,18 @@ class DW_PLAYLIST:
     def dw(self) -> Playlist:
         playlist_name = self.__json_data.get('name', 'unknown')
         total_tracks = self.__json_data.get('tracks', {}).get('total', 'unknown')
+        playlist_owner = self.__json_data.get('owner', {}).get('display_name', 'Unknown Owner')
+        playlist_id = self.__ids
+
+        # Report playlist initializing status
+        Download_JOB.report_progress({
+            "type": "playlist",
+            "owner": playlist_owner,
+            "status": "initializing",
+            "total_tracks": total_tracks,
+            "name": playlist_name,
+            "url": f"https://open.spotify.com/playlist/{playlist_id}"
+        })
         
         # --- Prepare the m3u playlist file ---
         playlist_m3u_dir = os.path.join(self.__output_dir, "playlists")
