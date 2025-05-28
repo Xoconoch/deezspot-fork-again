@@ -394,48 +394,48 @@ class EASY_DW:
             return skipped_track
 
         # Initial download start status with the new required format
-        progress_data = {
-            "type": "track",
-            "song": self.__song_metadata['music'],
-            "artist": self.__song_metadata['artist'],
-            "status": "progress",
-            "url": self.__link,
-            "convert_to": self.__convert_to
-        }
-        
-        # Add parent info based on parent type
-        if self.__parent == "playlist" and hasattr(self.__preferences, "json_data"):
-            playlist_data = self.__preferences.json_data
-            playlist_name = playlist_data.get('title', 'unknown')
-            total_tracks = getattr(self.__preferences, 'total_tracks', 0)
-            current_track = getattr(self.__preferences, 'track_number', 0)
-            
-            progress_data.update({
-                "current_track": current_track,
-                "total_tracks": total_tracks,
-                "parent": {
-                    "type": "playlist",
-                    "name": playlist_name,
-                    "owner": playlist_data.get('creator', {}).get('name', 'unknown')
-                }
-            })
-        elif self.__parent == "album":
-            album_name = self.__song_metadata.get('album', '')
-            album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('artist', ''))
-            total_tracks = getattr(self.__preferences, 'total_tracks', 0)
-            current_track = getattr(self.__preferences, 'track_number', 0)
-            
-            progress_data.update({
-                "current_track": current_track,
-                "total_tracks": total_tracks,
-                "parent": {
-                    "type": "album",
-                    "title": album_name,
-                    "artist": album_artist
-                }
-            })
-    
-        Download_JOB.report_progress(progress_data)
+        # progress_data = {
+        #     "type": "track",
+        #     "song": self.__song_metadata['music'],
+        #     "artist": self.__song_metadata['artist'],
+        #     "status": "progress",
+        #     "url": self.__link,
+        #     "convert_to": self.__convert_to
+        # }
+        # 
+        # # Add parent info based on parent type
+        # if self.__parent == "playlist" and hasattr(self.__preferences, "json_data"):
+        #     playlist_data = self.__preferences.json_data
+        #     playlist_name = playlist_data.get('title', 'unknown')
+        #     total_tracks = getattr(self.__preferences, 'total_tracks', 0)
+        #     current_track = getattr(self.__preferences, 'track_number', 0)
+        #     
+        #     progress_data.update({
+        #         "current_track": current_track,
+        #         "total_tracks": total_tracks,
+        #         "parent": {
+        #             "type": "playlist",
+        #             "name": playlist_name,
+        #             "owner": playlist_data.get('creator', {}).get('name', 'unknown')
+        #         }
+        #     })
+        # elif self.__parent == "album":
+        #     album_name = self.__song_metadata.get('album', '')
+        #     album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('artist', ''))
+        #     total_tracks = getattr(self.__preferences, 'total_tracks', 0)
+        #     current_track = getattr(self.__preferences, 'track_number', 0)
+        #     
+        #     progress_data.update({
+        #         "current_track": current_track,
+        #         "total_tracks": total_tracks,
+        #         "parent": {
+        #             "type": "album",
+        #             "title": album_name,
+        #             "artist": album_artist
+        #         }
+        #     })
+        # 
+        # Download_JOB.report_progress(progress_data)
 
         try:
             if self.__infos_dw.get('__TYPE__') == 'episode':

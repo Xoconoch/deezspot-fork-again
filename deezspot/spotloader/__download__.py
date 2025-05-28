@@ -274,55 +274,6 @@ class EASY_DW:
         image = request(pic).content
         self.__song_metadata['image'] = image
 
-        # Log initial "downloading" status using standardized format for both deezloader and spotloader
-        progress_data = {
-            "type": "track",
-            "song": self.__song_metadata.get("music", ""),
-            "artist": self.__song_metadata.get("artist", ""),
-            "status": "progress",
-            "url": self.__link  # Already using Spotify URL in spotloader
-        }
-        
-        # Add parent info based on parent type
-        if self.__parent == "playlist" and hasattr(self.__preferences, "json_data"):
-            playlist_data = self.__preferences.json_data
-            playlist_name = playlist_data.get('name', 'unknown')
-            total_tracks = playlist_data.get('tracks', {}).get('total', 'unknown')
-            current_track = getattr(self.__preferences, 'track_number', 0)
-            
-            # Format for playlist-parented tracks exactly as required across both loaders
-            progress_data.update({
-                "current_track": current_track,
-                "total_tracks": total_tracks,
-                "parent": {
-                    "type": "playlist",
-                    "name": playlist_name,
-                    "owner": playlist_data.get('owner', {}).get('display_name', 'unknown'),
-                    "total_tracks": total_tracks,
-                    "url": f"https://open.spotify.com/playlist/{playlist_data.get('id', '')}"
-                }
-            })
-        elif self.__parent == "album":
-            album_name = self.__song_metadata.get('album', '')
-            album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('ar_album', ''))
-            total_tracks = self.__song_metadata.get('nb_tracks', 0)
-            current_track = getattr(self.__preferences, 'track_number', 0)
-            
-            # Format for album-parented tracks exactly as required across both loaders
-            progress_data.update({
-                "current_track": current_track,
-                "total_tracks": total_tracks,
-                "parent": {
-                    "type": "album",
-                    "title": album_name,
-                    "artist": album_artist,
-                    "total_tracks": total_tracks,
-                    "url": f"https://open.spotify.com/album/{self.__song_metadata.get('album_id', '')}"
-                }
-            })
-            
-        Download_JOB.report_progress(progress_data)
-
         try:
             self.download_try()
         except Exception as e:
@@ -457,54 +408,6 @@ class EASY_DW:
         retry_delay_increase = getattr(self.__preferences, 'retry_delay_increase', 30)  # Default to 30 seconds
         max_retries = getattr(self.__preferences, 'max_retries', 5)  # Default to 5 retries
 
-        # Send immediate progress status for the track at the beginning of download
-        progress_data = {
-            "type": "track",
-            "song": self.__song_metadata.get("music", ""),
-            "artist": self.__song_metadata.get("artist", ""),
-            "status": "progress",
-            "url": self.__link,
-            "convert_to": self.__convert_to
-        }
-        
-        # Add parent info based on parent type
-        if self.__parent == "playlist" and hasattr(self.__preferences, "json_data"):
-            playlist_data = self.__preferences.json_data
-            playlist_name = playlist_data.get('name', 'unknown')
-            total_tracks = playlist_data.get('tracks', {}).get('total', 'unknown')
-            current_track = getattr(self.__preferences, 'track_number', 0)
-            
-            progress_data.update({
-                "current_track": current_track,
-                "total_tracks": total_tracks,
-                "parent": {
-                    "type": "playlist",
-                    "name": playlist_name,
-                    "owner": playlist_data.get('owner', {}).get('display_name', 'unknown'),
-                    "total_tracks": total_tracks,
-                    "url": f"https://open.spotify.com/playlist/{playlist_data.get('id', '')}"
-                }
-            })
-        elif self.__parent == "album":
-            album_name = self.__song_metadata.get('album', '')
-            album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('ar_album', ''))
-            total_tracks = self.__song_metadata.get('nb_tracks', 0)
-            current_track = getattr(self.__preferences, 'track_number', 0)
-            
-            progress_data.update({
-                "current_track": current_track,
-                "total_tracks": total_tracks,
-                "parent": {
-                    "type": "album",
-                    "title": album_name,
-                    "artist": album_artist,
-                    "total_tracks": total_tracks,
-                    "url": f"https://open.spotify.com/album/{self.__song_metadata.get('album_id', '')}"
-                }
-            })
-        
-        Download_JOB.report_progress(progress_data)
-        
         while True:
             try:
                 track_id_obj = TrackId.from_base62(self.__ids)
