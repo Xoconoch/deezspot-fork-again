@@ -379,7 +379,7 @@ class EASY_DW:
                         "title": album_name,
                         "artist": album_artist,
                         "total_tracks": total_tracks,
-                        "url": f"https://deezer.com/album/{self.__ids if hasattr(self, '__ids') else ''}"
+                        "url": f"https://deezer.com/album/{self.__preferences.song_metadata.get('album_id', '')}"
                     }
                 })
         
@@ -446,7 +446,8 @@ class EASY_DW:
                             "parent": {
                                 "type": "album",
                                 "title": self.__song_metadata.get('album', ''),
-                                "artist": self.__song_metadata.get('album_artist', self.__song_metadata.get('artist', ''))
+                                "artist": self.__song_metadata.get('album_artist', self.__song_metadata.get('artist', '')),
+                                "url": f"https://deezer.com/album/{self.__preferences.song_metadata.get('album_id', '')}"
                             }
                         })
                     Download_JOB.report_progress(progress_data)
@@ -619,7 +620,7 @@ class EASY_DW:
                             "title": album_name,
                             "artist": album_artist,
                             "total_tracks": total_tracks,
-                            "url": f"https://deezer.com/album/{self.__ids if hasattr(self, '__ids') else ''}"
+                            "url": f"https://deezer.com/album/{self.__preferences.song_metadata.get('album_id', '')}"
                         }
                     })
                 
@@ -723,7 +724,7 @@ class EASY_DW:
                             "title": album_name,
                             "artist": album_artist,
                             "total_tracks": total_tracks,
-                            "url": f"https://deezer.com/album/{self.__ids if hasattr(self, '__ids') else ''}"
+                            "url": f"https://deezer.com/album/{self.__preferences.song_metadata.get('album_id', '')}"
                         }
                     })
                 
