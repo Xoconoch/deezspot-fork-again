@@ -366,7 +366,7 @@ class EASY_DW:
                 })
             elif self.__parent == "album":
                 album_name = self.__song_metadata.get('album', '')
-                album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('artist', ''))
+                album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('album_artist', ''))
                 total_tracks = getattr(self.__preferences, 'total_tracks', 0)
                 current_track = getattr(self.__preferences, 'track_number', 0)
                 
@@ -608,7 +608,7 @@ class EASY_DW:
                     })
                 elif self.__parent == "album":
                     album_name = self.__song_metadata.get('album', '')
-                    album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('artist', ''))
+                    album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('album_artist', ''))
                     total_tracks = getattr(self.__preferences, 'total_tracks', 0)
                     current_track = getattr(self.__preferences, 'track_number', 0)
                     
@@ -712,7 +712,7 @@ class EASY_DW:
                     })
                 elif self.__parent == "album":
                     album_name = self.__song_metadata.get('album', '')
-                    album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('artist', ''))
+                    album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('album_artist', ''))
                     total_tracks = getattr(self.__preferences, 'total_tracks', 0)
                     current_track = getattr(self.__preferences, 'track_number', 0)
                     
