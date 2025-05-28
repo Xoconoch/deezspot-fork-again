@@ -1189,7 +1189,6 @@ class DW_ALBUM:
         download_cli(self.__preferences)
         return track
 
-# ... (rest of the code remains the same)
 class DW_PLAYLIST:
     def __init__(
         self,
@@ -1230,7 +1229,8 @@ class DW_PLAYLIST:
             # Use track-level reporting through EASY_DW
             track = EASY_DW(c_preferences, parent='playlist').easy_dw()
 
-            if not track.success:
+            # Only log a warning if the track failed and was NOT intentionally skipped
+            if not track.success and not getattr(track, 'was_skipped', False):
                 song = f"{c_song_metadata['music']} - {c_song_metadata['artist']}"
                 error_detail = getattr(track, 'error_message', 'Download failed for unspecified reason.')
                 logger.warning(f"Cannot download '{song}' from playlist '{playlist_name}'. Reason: {error_detail} (URL: {track.link or c_preferences.link})")

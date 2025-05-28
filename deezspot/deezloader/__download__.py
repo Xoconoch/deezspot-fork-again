@@ -1161,7 +1161,8 @@ class DW_PLAYLIST:
 
             # Track-level progress reporting is handled in EASY_DW
 
-            if not track.success:
+            # Only log a warning if the track failed and was NOT intentionally skipped
+            if not track.success and not getattr(track, 'was_skipped', False):
                 song = f"{c_song_metadata['music']} - {c_song_metadata['artist']}"
                 error_detail = getattr(track, 'error_message', 'Download failed for unspecified reason.')
                 logger.warning(f"Cannot download '{song}'. Reason: {error_detail} (Link: {track.link or c_preferences.link})")
