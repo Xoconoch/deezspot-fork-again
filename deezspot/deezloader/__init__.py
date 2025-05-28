@@ -368,48 +368,77 @@ class DeeLogin:
         ids = get_ids(link_album)
         link_dee = None
 
-        # Use stored credentials for API calls
-        tracks = Spo.get_album(ids)
+        spotify_album_data = Spo.get_album(ids)
 
+        # Method 1: Try UPC
         try:
-            external_ids = tracks['external_ids']
-            if not external_ids:
-                raise AlbumNotFound
+            external_ids = spotify_album_data.get('external_ids')
+            if external_ids and 'upc' in external_ids:
+                upc_base = str(external_ids['upc']).lstrip('0')
+                if upc_base:
+                    logger.debug(f"Attempting Deezer album search with UPC: {upc_base}")
+                    try:
+                        deezer_album_info = API.get_album(f"upc:{upc_base}")
+                        if isinstance(deezer_album_info, dict) and 'link' in deezer_album_info:
+                            link_dee = deezer_album_info['link']
+                            logger.info(f"Found Deezer album via UPC: {link_dee}")
+                    except NoDataApi:
+                        logger.debug(f"No Deezer album found for UPC: {upc_base}")
+                    except Exception as e_upc_search:
+                        logger.warning(f"Error during Deezer API call for UPC {upc_base}: {e_upc_search}")
+            else:
+                logger.debug("No UPC found in Spotify data for album link conversion.")
+        except Exception as e_upc_block:
+            logger.error(f"Error processing UPC for album {link_album}: {e_upc_block}")
 
-            upc = f"0{external_ids['upc']}"
-            while upc[0] == "0":
-                upc = upc[1:]
-                try:
-                    upc = f"upc:{upc}"
-                    url = API.get_album(upc)
-                    link_dee = url['link']
-                    break
-                except NoDataApi:
-                    if upc[0] != "0":
-                        raise AlbumNotFound
-        except AlbumNotFound:
-            tot = tracks['total_tracks']
-            tracks = tracks['tracks']['items']
-            tot2 = None
-            for track in tracks:
-                track_link = track['external_urls']['spotify']
-                # Use stored credentials for API calls
-                track_info = Spo.get_track(track_link)
-                try:
-                    isrc = f"isrc:{track_info['external_ids']['isrc']}"
-                    track_data = API.get_track(isrc)
-                    if not "id" in track_data['album']:
-                        continue
-                    album_ids = track_data['album']['id']
-                    album_json = API.get_album(album_ids)
-                    tot2 = album_json['nb_tracks']
-                    if tot == tot2:
-                        link_dee = album_json['link']
-                        break
-                except NoDataApi:
-                    pass
-            if tot != tot2:
-                raise AlbumNotFound(link_album)
+        # Method 2: Try ISRC if UPC failed
+        if not link_dee:
+            logger.debug(f"UPC method failed or skipped for {link_album}. Attempting ISRC method.")
+            try:
+                spotify_total_tracks = spotify_album_data.get('total_tracks')
+                spotify_tracks_items = spotify_album_data.get('tracks', {}).get('items', [])
+
+                if not spotify_tracks_items:
+                    logger.warning(f"No track items in Spotify data for {link_album} to attempt ISRC lookup.")
+                else:
+                    for track_item in spotify_tracks_items:
+                        try:
+                            track_spotify_link = track_item.get('external_urls', {}).get('spotify')
+                            if not track_spotify_link: continue
+
+                            spotify_track_info = Spo.get_track(track_spotify_link)
+                            isrc_value = spotify_track_info.get('external_ids', {}).get('isrc')
+                            if not isrc_value: continue
+                            
+                            logger.debug(f"Attempting Deezer track search with ISRC: {isrc_value}")
+                            deezer_track_info = API.get_track(f"isrc:{isrc_value}")
+
+                            if isinstance(deezer_track_info, dict) and 'album' in deezer_track_info:
+                                deezer_album_preview = deezer_track_info['album']
+                                if isinstance(deezer_album_preview, dict) and 'id' in deezer_album_preview:
+                                    deezer_album_id = deezer_album_preview['id']
+                                    full_deezer_album_info = API.get_album(deezer_album_id)
+                                    if (
+                                        isinstance(full_deezer_album_info, dict) and
+                                        full_deezer_album_info.get('nb_tracks') == spotify_total_tracks and
+                                        'link' in full_deezer_album_info
+                                    ):
+                                        link_dee = full_deezer_album_info['link']
+                                        logger.info(f"Found Deezer album via ISRC ({isrc_value}): {link_dee}")
+                                        break  # Found a matching album, exit track loop
+                        except NoDataApi:
+                            logger.debug(f"No Deezer track/album found for ISRC: {isrc_value}")
+                            # Continue to the next track's ISRC
+                        except Exception as e_isrc_track_search:
+                            logger.warning(f"Error during Deezer search for ISRC {isrc_value}: {e_isrc_track_search}")
+                            # Continue to the next track's ISRC
+                    if not link_dee: # If loop finished and no link found via ISRC
+                        logger.warning(f"ISRC method completed for {link_album}, but no matching Deezer album found.")
+            except Exception as e_isrc_block:
+                logger.error(f"Error during ISRC processing block for {link_album}: {e_isrc_block}")
+
+        if not link_dee:
+            raise AlbumNotFound(f"Failed to convert Spotify album link {link_album} to a Deezer link after all attempts.")
 
         return link_dee
 
