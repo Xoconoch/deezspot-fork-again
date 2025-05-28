@@ -289,18 +289,22 @@ class EASY_DW:
             error_message = f"Download failed for '{song_title}' by '{artist_name}' (URL: {self.__link}). Original error: {str(e)}"
             logger.error(error_message)
             traceback.print_exc()
+            # Store the error message on the track object if it exists
             if hasattr(self, '_EASY_DW__c_track') and self.__c_track:
                 self.__c_track.success = False
                 self.__c_track.error_message = error_message # Store the more detailed error message
-            elif hasattr(self, '_EASY_DW__c_episode') and self.__c_episode: # For episodes
-                self.__c_episode.success = False
-                self.__c_episode.error_message = error_message
+            # Removed problematic elif for __c_episode here as easy_dw in spotloader is focused on tracks.
+            # Episode-specific error handling should be within download_eps or its callers.
             raise TrackNotFound(message=error_message, url=self.__link) from e
         
-        # Final check for track success before returning
-        # This applies mainly if download_try itself didn't raise an exception but still failed
-        if hasattr(self, '_EASY_DW__c_track') and self.__c_track and \
-            not self.__c_track.success and not getattr(self.__c_track, 'was_skipped', False):
+        # If the track was skipped (e.g. file already exists), return it immediately.
+        # download_try sets success=False and was_skipped=True in this case.
+        if hasattr(self, '_EASY_DW__c_track') and self.__c_track and getattr(self.__c_track, 'was_skipped', False):
+            return self.__c_track
+
+        # Final check for non-skipped tracks that might have failed after download_try returned.
+        # This handles cases where download_try didn't raise an exception but self.__c_track.success is still False.
+        if hasattr(self, '_EASY_DW__c_track') and self.__c_track and not self.__c_track.success:
             song_title = self.__song_metadata.get('music', 'Unknown Song')
             artist_name = self.__song_metadata.get('artist', 'Unknown Artist')
             original_error_msg = getattr(self.__c_track, 'error_message', "Download failed for an unspecified reason after attempt.")
@@ -308,12 +312,14 @@ class EASY_DW:
             final_error_msg = error_msg_template.format(title=song_title, artist=artist_name, reason=original_error_msg)
             current_link = self.__c_track.link if hasattr(self.__c_track, 'link') and self.__c_track.link else self.__link
             logger.error(f"{final_error_msg} (URL: {current_link})")
-            # Ensure the error_message on the track is the most specific one before raising
-            self.__c_track.error_message = final_error_msg
+            self.__c_track.error_message = final_error_msg # Ensure the most specific error is on the object
             raise TrackNotFound(message=final_error_msg, url=current_link)
             
-        write_tags(self.__c_track)
-        return self.__c_track
+        # If we reach here, the track should be successful and not skipped.
+        if hasattr(self, '_EASY_DW__c_track') and self.__c_track and self.__c_track.success:
+            write_tags(self.__c_track)
+        
+        return self.__c_track # Return the track object
 
     def track_exists(self, title, album):
         try:

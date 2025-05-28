@@ -384,112 +384,114 @@ class EASY_DW:
                 })
         
             Download_JOB.report_progress(progress_data)
-            skipped_track = Track(
+            # self.__c_track might not be fully initialized here if __write_track() hasn't been called
+            # Create a minimal track object for skipped scenario
+            skipped_item = Track(
                 self.__song_metadata,
-                None, None, None,
+                self.__song_path, # song_path would be set if __write_track was called
+                self.__file_format, self.__song_quality,
                 self.__link, self.__ids
             )
-            skipped_track.success = False
-            skipped_track.was_skipped = True
-            return skipped_track
+            skipped_item.success = False
+            skipped_item.was_skipped = True
+            # It's important that this skipped_item is what's checked later, or self.__c_track is updated
+            self.__c_track = skipped_item # Ensure self.__c_track reflects this skipped state
+            return self.__c_track # Return the correctly flagged skipped track
+
+        # Initialize success to False for the item being processed
+        if self.__infos_dw.get('__TYPE__') == 'episode':
+            if hasattr(self, '_EASY_DW__c_episode') and self.__c_episode:
+                 self.__c_episode.success = False
+        else:
+            if hasattr(self, '_EASY_DW__c_track') and self.__c_track:
+                 self.__c_track.success = False
 
         try:
             if self.__infos_dw.get('__TYPE__') == 'episode':
-                try:
-                    return self.download_episode_try()
-                except Exception as e:
-                    self.__c_track.success = False
-                    raise e
+                # download_episode_try should set self.__c_episode.success = True if successful
+                self.download_episode_try() # This will modify self.__c_episode directly
             else:
-                self.download_try()
-                # Create done status report using the new required format
-                progress_data = {
-                    "type": "track",
-                    "song": self.__song_metadata['music'],
-                    "artist": self.__song_metadata['artist'],
-                    "status": "done",
-                    "convert_to": self.__convert_to
-                }
+                # download_try should set self.__c_track.success = True if successful
+                self.download_try() # This will modify self.__c_track directly
                 
-                # Use Spotify URL if available (for downloadspo functions), otherwise use Deezer link
-                spotify_url = getattr(self.__preferences, 'spotify_url', None)
-                progress_data["url"] = spotify_url if spotify_url else self.__link
-                
-                # Add parent info based on parent type
-                if self.__parent == "playlist" and hasattr(self.__preferences, "json_data"):
-                    playlist_data = self.__preferences.json_data
-                    playlist_name = playlist_data.get('title', 'unknown')
-                    total_tracks = getattr(self.__preferences, 'total_tracks', 0)
-                    current_track = getattr(self.__preferences, 'track_number', 0)
-                    
-                    progress_data.update({
-                        "current_track": current_track,
-                        "total_tracks": total_tracks,
-                        "parent": {
-                            "type": "playlist",
-                            "name": playlist_name,
-                            "owner": playlist_data.get('creator', {}).get('name', 'unknown')
-                        }
-                    })
-                elif self.__parent == "album":
-                    album_name = self.__song_metadata.get('album', '')
-                    album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('artist', ''))
-                    total_tracks = getattr(self.__preferences, 'total_tracks', 0)
-                    current_track = getattr(self.__preferences, 'track_number', 0)
-                    
-                    progress_data.update({
-                        "current_track": current_track,
-                        "total_tracks": total_tracks,
-                        "parent": {
-                            "type": "album",
-                            "title": album_name,
-                            "artist": album_artist
-                        }
-                    })
-                
-                Download_JOB.report_progress(progress_data)
-        except TrackNotFound:
-            try:
-                self.__fallback_ids = API.not_found(song, self.__song_metadata['music'])
-                self.__infos_dw = API_GW.get_song_data(self.__fallback_ids)
+                # Create done status report using the new required format (only if download_try didn't fail)
+                # This part should only execute if download_try itself was successful (i.e., no exception)
+                if self.__c_track.success : # Check if download_try marked it as successful
+                    progress_data = {
+                        "type": "track",
+                        "song": self.__song_metadata['music'],
+                        "artist": self.__song_metadata['artist'],
+                        "status": "done",
+                        "convert_to": self.__convert_to
+                    }
+                    spotify_url = getattr(self.__preferences, 'spotify_url', None)
+                    progress_data["url"] = spotify_url if spotify_url else self.__link
+                    if self.__parent == "playlist" and hasattr(self.__preferences, "json_data"):
+                        playlist_data = self.__preferences.json_data
+                        # ... (rest of playlist parent data) ...
+                        progress_data.update({
+                            "current_track": getattr(self.__preferences, 'track_number', 0),
+                            "total_tracks": getattr(self.__preferences, 'total_tracks', 0),
+                            "parent": {
+                                "type": "playlist",
+                                "name": playlist_data.get('title', 'unknown'),
+                                "owner": playlist_data.get('creator', {}).get('name', 'unknown')
+                            }
+                        })
+                    elif self.__parent == "album":
+                        # ... (rest of album parent data) ...
+                        progress_data.update({
+                            "current_track": getattr(self.__preferences, 'track_number', 0),
+                            "total_tracks": getattr(self.__preferences, 'total_tracks', 0),
+                            "parent": {
+                                "type": "album",
+                                "title": self.__song_metadata.get('album', ''),
+                                "artist": self.__song_metadata.get('album_artist', self.__song_metadata.get('artist', ''))
+                            }
+                        })
+                    Download_JOB.report_progress(progress_data)
 
-                media = Download_JOB.check_sources(
-                    [self.__infos_dw], self.__quality_download
-                )
-
-                self.__infos_dw['media_url'] = media[0]
-                self.download_try()
-            except TrackNotFound:
-                self.__c_track = Track(
-                    self.__song_metadata,
-                    None, None,
-                    None, None, None,
-                )
-
-                self.__c_track.success = False
-
-        self.__c_track.md5_image = pic
-
-        # Final check if track download/processing failed and it was not an intentional skip
-        if not self.__c_track.success and not getattr(self.__c_track, 'was_skipped', False):
-            song_title = self.__song_metadata.get('music', 'Unknown Song')
+        except Exception as e: # Covers failures within download_try or download_episode_try
+            item_type = "Episode" if self.__infos_dw.get('__TYPE__') == 'episode' else "Track"
+            item_name = self.__song_metadata.get('music', f'Unknown {item_type}')
             artist_name = self.__song_metadata.get('artist', 'Unknown Artist')
+            error_message = f"Download process failed for {item_type.lower()} '{item_name}' by '{artist_name}' (URL: {self.__link}). Error: {str(e)}"
+            logger.error(error_message)
             
-            # Retrieve the most specific error message stored on the track object
-            # This message would have been set by download_try or download_episode_try
-            original_error_msg = getattr(self.__c_track, 'error_message', "Download failed for an unspecified reason.")
-            
-            error_msg_template = "Cannot download '{title}' by '{artist}'. Reason: {reason}"
-            final_error_msg = error_msg_template.format(title=song_title, artist=artist_name, reason=original_error_msg)
-            
-            current_link = self.__c_track.link if hasattr(self.__c_track, 'link') and self.__c_track.link else self.__link
-            
-            logger.error(f"{final_error_msg} (URL: {current_link})")
-            # Ensure the error message on the track is the final one before raising
-            self.__c_track.error_message = final_error_msg 
-            raise TrackNotFound(message=final_error_msg, url=current_link)
+            current_item_obj = self.__c_episode if self.__infos_dw.get('__TYPE__') == 'episode' else self.__c_track
+            if current_item_obj:
+                current_item_obj.success = False
+                current_item_obj.error_message = error_message
+            raise TrackNotFound(message=error_message, url=self.__link) from e
 
-        return self.__c_track
+        # --- Handling after download attempt --- 
+
+        current_item = self.__c_episode if self.__infos_dw.get('__TYPE__') == 'episode' else self.__c_track
+        item_type_str = "episode" if self.__infos_dw.get('__TYPE__') == 'episode' else "track"
+
+        # If the item was skipped (e.g. file already exists), return it immediately.
+        if getattr(current_item, 'was_skipped', False):
+            return current_item
+
+        # Final check for non-skipped items that might have failed.
+        if not current_item.success:
+            item_name = self.__song_metadata.get('music', f'Unknown {item_type_str.capitalize()}')
+            artist_name = self.__song_metadata.get('artist', 'Unknown Artist')
+            original_error_msg = getattr(current_item, 'error_message', f"Download failed for an unspecified reason after {item_type_str} processing attempt.")
+            error_msg_template = "Cannot download {type} '{title}' by '{artist}'. Reason: {reason}"
+            final_error_msg = error_msg_template.format(type=item_type_str, title=item_name, artist=artist_name, reason=original_error_msg)
+            current_link_attr = current_item.link if hasattr(current_item, 'link') and current_item.link else self.__link
+            logger.error(f"{final_error_msg} (URL: {current_link_attr})")
+            current_item.error_message = final_error_msg
+            raise TrackNotFound(message=final_error_msg, url=current_link_attr)
+
+        # If we reach here, the item should be successful and not skipped.
+        if current_item.success:
+            if self.__infos_dw.get('__TYPE__') != 'episode': # Assuming pic is for tracks
+                 current_item.md5_image = pic # Set md5_image for tracks
+            write_tags(current_item)
+        
+        return current_item
 
     def download_try(self) -> Track:
         # Pre-check: if FLAC is requested but filesize is zero, fallback to MP3.
