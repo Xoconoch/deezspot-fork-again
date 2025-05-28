@@ -438,23 +438,23 @@ class EASY_DW:
                                 "owner": playlist_data.get('creator', {}).get('name', 'unknown')
                             }
                         })
-                    elif self.__parent == "album":
-                        album_name = self.__song_metadata.get('album', '')
-                        album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('album_artist', ''))
-                        total_tracks = getattr(self.__preferences, 'total_tracks', 0)
-                        current_track = getattr(self.__preferences, 'track_number', 0)
-                        
-                        progress_data.update({
-                            "current_track": current_track,
+                elif self.__parent == "album":
+                    album_name = self.__song_metadata.get('album', '')
+                    album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('album_artist', ''))
+                    total_tracks = getattr(self.__preferences, 'total_tracks', 0)
+                    current_track = getattr(self.__preferences, 'track_number', 0)
+                    
+                    progress_data.update({
+                        "current_track": current_track,
+                        "total_tracks": total_tracks,
+                        "parent": {
+                            "type": "album",
+                            "title": album_name,
+                            "artist": album_artist,
                             "total_tracks": total_tracks,
-                            "parent": {
-                                "type": "album",
-                                "title": album_name,
-                                "artist": album_artist,
-                                "total_tracks": total_tracks,
-                                "url": f"https://deezer.com/album/{self.__preferences.song_metadata.get('album_id', '')}"
-                            }
-                        })
+                            "url": f"https://deezer.com/album/{self.__preferences.song_metadata.get('album_id', '')}"
+                        }
+                    })
                     Download_JOB.report_progress(progress_data)
 
         except Exception as e: # Covers failures within download_try or download_episode_try
@@ -928,26 +928,26 @@ class DW_ALBUM:
                 return None
             return max(set(items), key=items.count)
         
-        # Derive the main album artist string based on the logic for track metadata's album_artist
-        derived_album_artist_str = "Unknown Artist" # Default
-        album_artist_source = self.__song_metadata.get('artist')
+        # Derive album_artist strictly from the album's API contributors
+        album_api_contributors = self.__preferences.json_data.get('contributors', [])
+        derived_album_artist_from_contributors = "Unknown Artist" # Default
 
-        if isinstance(album_artist_source, str):
-            derived_album_artist_str = album_artist_source.replace(" & ", ";").strip()
-        elif isinstance(album_artist_source, list):
-            processed_elements = []
-            for item_val in album_artist_source:
-                if isinstance(item_val, str):
-                    processed_elements.append(item_val.replace(" & ", ";").strip())
-                elif item_val is not None: # Convert non-string, non-None items to string
-                    processed_elements.append(str(item_val).strip())
-            # Join only non-empty, stripped elements
-            derived_album_artist_str = "; ".join(filter(None, processed_elements))
-        elif album_artist_source is not None: # Handle other types like numbers
-             derived_album_artist_str = str(album_artist_source).strip()
-        
-        if not derived_album_artist_str: # If empty after processing (e.g. list of None or empty strings)
-            derived_album_artist_str = "Unknown Artist"
+        if album_api_contributors: # Check if contributors list is not empty
+            main_contributor_names = [
+                c.get('name') for c in album_api_contributors
+                if c.get('name') and c.get('role', '').lower() == 'main'
+            ]
+
+            if main_contributor_names:
+                derived_album_artist_from_contributors = "; ".join(main_contributor_names)
+            else: # No 'Main' contributors, try all contributors with a name
+                all_contributor_names = [
+                    c.get('name') for c in album_api_contributors if c.get('name')
+                ]
+                if all_contributor_names:
+                    derived_album_artist_from_contributors = "; ".join(all_contributor_names)
+        # If album_api_contributors is empty or no names were found, it remains "Unknown Artist"
+
 
         # Report album initializing status
         album_name_for_report = self.__song_metadata.get('album', 'Unknown Album')
@@ -955,7 +955,7 @@ class DW_ALBUM:
         
         Download_JOB.report_progress({
             "type": "album",
-            "artist": derived_album_artist_str, # Use the derived string
+            "artist": derived_album_artist_from_contributors,
             "status": "initializing",
             "total_tracks": total_tracks_for_report,
             "title": album_name_for_report,
@@ -982,9 +982,7 @@ class DW_ALBUM:
             infos_dw, self.__quality_download
         )
         
-        # Extract album metadata - we won't create a report here, 
-        # but we'll use this information for individual track reporting
-        album_artist = self.__song_metadata.get('album_artist', self.__song_metadata['artist'])
+        # The album_artist for tagging individual tracks will be derived_album_artist_from_contributors
         
         total_tracks = len(infos_dw)
         for a in range(total_tracks):
@@ -1024,7 +1022,7 @@ class DW_ALBUM:
                 'tracknum': f"{track_number}",
                 'discnum': f"{c_infos_dw.get('DISK_NUMBER', 1)}",
                 'isrc': c_infos_dw.get('ISRC', ''),
-                'album_artist': derived_album_artist_str, # Use the derived string here
+                'album_artist': derived_album_artist_from_contributors,
                 'publisher': 'CanZion R',
                 'duration': int(c_infos_dw.get('DURATION', 0)),
                 'explicit': '1' if c_infos_dw.get('EXPLICIT_LYRICS', '0') == '1' else '0'
@@ -1095,7 +1093,7 @@ class DW_ALBUM:
         
         Download_JOB.report_progress({
             "type": "album",
-            "artist": derived_album_artist_str, # Use the derived string
+            "artist": derived_album_artist_from_contributors,
             "status": "done",
             "total_tracks": total_tracks,
             "title": album_name,
