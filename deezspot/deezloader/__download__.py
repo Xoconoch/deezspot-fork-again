@@ -367,7 +367,6 @@ class EASY_DW:
             elif self.__parent == "album":
                 album_name = self.__song_metadata.get('album', '')
                 album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('album_artist', ''))
-                progress_data.update({"album_artist": album_artist})
                 total_tracks = getattr(self.__preferences, 'total_tracks', 0)
                 current_track = getattr(self.__preferences, 'track_number', 0)
                 
@@ -929,21 +928,37 @@ class DW_ALBUM:
                 return None
             return max(set(items), key=items.count)
         
+        # Derive the main album artist string based on the logic for track metadata's album_artist
+        derived_album_artist_str = "Unknown Artist" # Default
+        album_artist_source = self.__song_metadata.get('artist')
+
+        if isinstance(album_artist_source, str):
+            derived_album_artist_str = album_artist_source.replace(" & ", ";").strip()
+        elif isinstance(album_artist_source, list):
+            processed_elements = []
+            for item_val in album_artist_source:
+                if isinstance(item_val, str):
+                    processed_elements.append(item_val.replace(" & ", ";").strip())
+                elif item_val is not None: # Convert non-string, non-None items to string
+                    processed_elements.append(str(item_val).strip())
+            # Join only non-empty, stripped elements
+            derived_album_artist_str = "; ".join(filter(None, processed_elements))
+        elif album_artist_source is not None: # Handle other types like numbers
+             derived_album_artist_str = str(album_artist_source).strip()
+        
+        if not derived_album_artist_str: # If empty after processing (e.g. list of None or empty strings)
+            derived_album_artist_str = "Unknown Artist"
+
         # Report album initializing status
-        album_name = self.__song_metadata.get('album', 'Unknown Album')
-        # Use album_artist if available, otherwise artist
-        album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('artist', 'Unknown Artist'))
-        # If album_artist is a list, use the most frequent one
-        if isinstance(album_artist, list):
-            album_artist = most_frequent(album_artist)
-        total_tracks = self.__song_metadata.get('nb_tracks', 0)
+        album_name_for_report = self.__song_metadata.get('album', 'Unknown Album')
+        total_tracks_for_report = self.__song_metadata.get('nb_tracks', 0)
         
         Download_JOB.report_progress({
             "type": "album",
-            "artist": album_artist,
+            "artist": derived_album_artist_str, # Use the derived string
             "status": "initializing",
-            "total_tracks": total_tracks,
-            "title": album_name,
+            "total_tracks": total_tracks_for_report,
+            "title": album_name_for_report,
             "url": f"https://deezer.com/album/{self.__ids}"
         })
         
@@ -1009,7 +1024,7 @@ class DW_ALBUM:
                 'tracknum': f"{track_number}",
                 'discnum': f"{c_infos_dw.get('DISK_NUMBER', 1)}",
                 'isrc': c_infos_dw.get('ISRC', ''),
-                'album_artist': self.__song_metadata['artist'].replace(" & ", ";") if " & " in self.__song_metadata['artist'] else self.__song_metadata['artist'],
+                'album_artist': derived_album_artist_str, # Use the derived string here
                 'publisher': 'CanZion R',
                 'duration': int(c_infos_dw.get('DURATION', 0)),
                 'explicit': '1' if c_infos_dw.get('EXPLICIT_LYRICS', '0') == '1' else '0'
@@ -1076,16 +1091,11 @@ class DW_ALBUM:
 
         # Report album done status
         album_name = self.__song_metadata.get('album', 'Unknown Album')
-        # Use album_artist if available, otherwise artist
-        album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('artist', 'Unknown Artist'))
-        # If album_artist is a list, use the most frequent one
-        if isinstance(album_artist, list):
-            album_artist = max(set(album_artist), key=album_artist.count) if album_artist else 'Unknown Artist'
         total_tracks = self.__song_metadata.get('nb_tracks', 0)
         
         Download_JOB.report_progress({
             "type": "album",
-            "artist": album_artist,
+            "artist": derived_album_artist_str, # Use the derived string
             "status": "done",
             "total_tracks": total_tracks,
             "title": album_name,
