@@ -439,14 +439,19 @@ class EASY_DW:
                             }
                         })
                     elif self.__parent == "album":
-                        # ... (rest of album parent data) ...
+                        album_name = self.__song_metadata.get('album', '')
+                        album_artist = self.__song_metadata.get('album_artist', self.__song_metadata.get('album_artist', ''))
+                        total_tracks = getattr(self.__preferences, 'total_tracks', 0)
+                        current_track = getattr(self.__preferences, 'track_number', 0)
+                        
                         progress_data.update({
-                            "current_track": getattr(self.__preferences, 'track_number', 0),
-                            "total_tracks": getattr(self.__preferences, 'total_tracks', 0),
+                            "current_track": current_track,
+                            "total_tracks": total_tracks,
                             "parent": {
                                 "type": "album",
-                                "title": self.__song_metadata.get('album', ''),
-                                "artist": self.__preferences.song_metadata.get('album_artist', self.__preferences.song_metadata.get('artist', '')),
+                                "title": album_name,
+                                "artist": album_artist,
+                                "total_tracks": total_tracks,
                                 "url": f"https://deezer.com/album/{self.__preferences.song_metadata.get('album_id', '')}"
                             }
                         })
