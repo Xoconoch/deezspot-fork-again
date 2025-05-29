@@ -28,12 +28,8 @@ def tracking(ids, album=None):
             datas['album'] = json_album['name']
             datas['label'] = json_album['label']
 
-            external_ids = json_album['external_ids']
-
-            if external_ids:
-                datas['upc'] = external_ids['upc']
-            else:
-                datas['upc'] = "Unknown"
+            external_ids = json_album.get('external_ids', {})
+            datas['upc'] = external_ids.get('upc', "Unknown")
 
             datas['nb_tracks'] = json_album['total_tracks']
 
@@ -55,10 +51,8 @@ def tracking(ids, album=None):
         datas['bpm'] = "Unknown"
         datas['duration'] = json_track['duration_ms'] // 1000
 
-        external_ids = json_track['external_ids']
-
-        if external_ids:
-            datas['isrc'] = external_ids['isrc']
+        external_ids = json_track.get('external_ids', {})
+        datas['isrc'] = external_ids.get('isrc', 'Unknown')
 
         datas['gain'] = "Unknown"
         datas['ids'] = ids
@@ -102,23 +96,35 @@ def tracking_album(album_json):
 
         song_metadata['ar_album'] = "; ".join(ar_album)
 
-        external_ids = album_json['external_ids']
-
-        if external_ids:
-            song_metadata['upc'] = external_ids['upc']
-        else:
-            song_metadata['upc'] = "Unknown"
+        external_ids = album_json.get('external_ids', {})
+        song_metadata['upc'] = external_ids.get('upc', "Unknown")
 
         sm_items = song_metadata.items()
 
         for track in album_json['tracks']['items']:
             c_ids = track['id']
             detas = tracking(c_ids, album=True)
+            if detas is None:
+                logger.warning(f"Could not retrieve metadata for track {c_ids} in album {album_json['id']}. Skipping.")
+                for key, item in sm_items:
+                    if type(item) is list:
+                        if key == 'isrc':
+                            song_metadata[key].append('Unknown')
+                        elif key in detas:
+                            song_metadata[key].append(detas[key])
+                        else:
+                            song_metadata[key].append('Unknown')
+                continue
 
             for key, item in sm_items:
                 if type(item) is list:
-                    song_metadata[key].append(detas[key])
-                    
+                    if key == 'isrc':
+                        song_metadata[key].append(detas.get('isrc', 'Unknown'))
+                    elif key in detas:
+                        song_metadata[key].append(detas[key])
+                    else:
+                        song_metadata[key].append('Unknown')
+
         logger.debug(f"Successfully tracked metadata for album {album_json['id']}")
                     
     except Exception as e:

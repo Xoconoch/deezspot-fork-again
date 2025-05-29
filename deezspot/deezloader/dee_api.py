@@ -230,6 +230,9 @@ class API:
 		song_metadata = {}
 		json_track = cls.get_track(ids)
 
+		# Ensure ISRC is always fetched
+		song_metadata['isrc'] = json_track.get('isrc', '')
+
 		if not album:
 			album_ids = json_track['album']['id']
 			album_json = cls.get_album(album_ids)
@@ -249,7 +252,8 @@ class API:
 			song_metadata['ar_album'] = "; ".join(ar_album)
 			song_metadata['album'] = album_json['title']
 			song_metadata['label'] = album_json['label']
-			song_metadata['upc'] = album_json['upc']
+			# Ensure UPC is fetched from album data
+			song_metadata['upc'] = album_json.get('upc', '')
 			song_metadata['nb_tracks'] = album_json['nb_tracks']
 
 		song_metadata['music'] = json_track['title']
@@ -269,7 +273,7 @@ class API:
 		song_metadata['year'] = convert_to_date(json_track['release_date'])
 		song_metadata['bpm'] = json_track['bpm']
 		song_metadata['duration'] = json_track['duration']
-		song_metadata['isrc'] = json_track['isrc']
+		# song_metadata['isrc'] = json_track['isrc'] # Already handled above
 		song_metadata['gain'] = json_track['gain']
 
 		return song_metadata
@@ -286,12 +290,13 @@ class API:
 			"discnum": [],
 			"bpm": [],
 			"duration": [],
-			"isrc": [],
+			"isrc": [], # Ensure isrc list is present for tracks
 			"gain": [],
 			"album": album_json['title'],
 			"label": album_json['label'],
 			"year": convert_to_date(album_json['release_date']),
-			"upc": album_json['upc'],
+			# Ensure UPC is fetched at album level
+			"upc": album_json.get('upc', ''),
 			"nb_tracks": album_json['nb_tracks']
 		}
 
@@ -317,6 +322,10 @@ class API:
 
 			for key, item in sm_items:
 				if type(item) is list:
-					song_metadata[key].append(detas[key])
+					# Ensure ISRC is appended for each track
+					if key == 'isrc':
+						song_metadata[key].append(detas.get('isrc', ''))
+					else:
+						song_metadata[key].append(detas[key])
 
 		return song_metadata

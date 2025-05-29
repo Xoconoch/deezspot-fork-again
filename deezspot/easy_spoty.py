@@ -196,7 +196,7 @@ class Spo:
         return search
 
     @classmethod
-    def get_artist(cls, ids, album_type='album,single,compilation,appears_on', limit=50, client_id=None, client_secret=None):
+    def get_artist(cls, ids, album_type='album,single,compilation,appears_on', limit=50, offset=0, client_id=None, client_secret=None):
         """
         Get artist information and discography by ID.
         
@@ -216,7 +216,8 @@ class Spo:
             discography = api.artist_albums(
                 ids,
                 album_type=album_type,
-                limit=limit
+                limit=limit,
+                offset=offset
             )
         except SpotifyException as error:
             if error.http_status in cls.__error_codes:
