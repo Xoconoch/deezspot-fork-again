@@ -196,7 +196,29 @@ class Spo:
         return search
 
     @classmethod
-    def get_artist(cls, ids, album_type='album,single,compilation,appears_on', limit=50, offset=0, client_id=None, client_secret=None):
+    def get_artist(cls, ids, client_id=None, client_secret=None):
+        """
+        Get artist information by ID.
+        
+        Args:
+            ids (str): Spotify artist ID
+            client_id (str, optional): Optional custom Spotify client ID
+            client_secret (str, optional): Optional custom Spotify client secret
+            
+        Returns:
+            dict: Artist information
+        """
+        api = cls.__get_api(client_id, client_secret)
+        try:
+            artist_json = api.artist(ids)
+        except SpotifyException as error:
+            if error.http_status in cls.__error_codes:
+                raise InvalidLink(ids)
+
+        return artist_json
+
+    @classmethod
+    def get_artist_discography(cls, ids, album_type='album,single,compilation,appears_on', limit=50, offset=0, client_id=None, client_secret=None):
         """
         Get artist information and discography by ID.
         
